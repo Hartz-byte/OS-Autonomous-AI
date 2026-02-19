@@ -14,6 +14,10 @@ class MessageRequest(BaseModel):
 TOOLS = """
 You have access to the following tools:
 
+IMPORTANT:
+- If the user greets (Hello, Hi, Hey), DO NOT call any tool.
+- If the answer can be generated from general knowledge, DO NOT use browser_search.
+
 1. browser_search
    payload: {"query": "search term"}
 
@@ -52,16 +56,27 @@ def ask_llm(prompt):
     return response.json()["response"]
 
 def call_tool(tool_name, payload):
-    response = requests.post(
-        f"{EXECUTOR_URL}/tool/{tool_name}",
-        json=payload
-    )
-    return response.json()
+    try:
+        response = requests.post(
+            f"{EXECUTOR_URL}/tool/{tool_name}",
+            json=payload,
+            timeout=120
+        )
+        return response.json()
+    except Exception as e:
+        return {"error": str(e)}
 
 def autonomous_loop(user_input):
     context = f"""
 You are an autonomous AI agent.
-Decide step by step how to complete the user's request.
+
+RULES:
+- Only call a tool if absolutely necessary.
+- Never call the same tool twice with identical payload.
+- After receiving tool results, you MUST either:
+  1) Provide final answer
+  OR
+  2) Call a DIFFERENT tool.
 
 User request:
 {user_input}
@@ -69,14 +84,20 @@ User request:
 {TOOLS}
 """
 
-    for _ in range(5):  # max 5 tool iterations
+    previous_calls = set()
+
+    for step in range(5):
         reply = ask_llm(context)
         print("LLM RAW:", reply)
 
+        # Extract JSON safely
         try:
-            decision = json.loads(reply)
+            start = reply.find("{")
+            end = reply.rfind("}") + 1
+            json_str = reply[start:end]
+            decision = json.loads(json_str)
         except:
-            return reply
+            return reply.strip()
 
         if "final" in decision:
             return decision["final"]
@@ -85,13 +106,26 @@ User request:
             tool_name = decision["tool"]
             payload = decision["payload"]
 
+            call_signature = f"{tool_name}:{json.dumps(payload, sort_keys=True)}"
+
+            if call_signature in previous_calls:
+                return "Stopping due to repeated identical tool calls."
+
+            previous_calls.add(call_signature)
+
             print(f"Calling tool: {tool_name}")
             tool_result = call_tool(tool_name, payload)
 
-            context += f"\nTool result:\n{tool_result}\n"
+            context += f"""
+Tool used: {tool_name}
+Tool result:
+{tool_result}
+
+Now analyze the result and provide final answer unless another tool is strictly required.
+"""
 
         else:
-            return reply
+            return reply.strip()
 
     return "Task stopped after max steps."
 
