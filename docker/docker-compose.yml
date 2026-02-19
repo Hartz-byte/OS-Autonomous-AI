@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+
+  openclaw:
+    build:
+      context: ./openclaw
+    container_name: openclaw-agent
+    ports:
+      - "8000:8000"
+
+  whatsapp:
+    build:
+      context: ./whatsapp
+    container_name: whatsapp-bridge
+    depends_on:
+      - openclaw
+    ports:
+      - "3000:3000"

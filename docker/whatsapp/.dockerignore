@@ -1,0 +1,5 @@
+node_modules
+session
+.wwebjs_auth
+npm-debug.log
+Dockerfile

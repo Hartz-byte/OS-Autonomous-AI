@@ -1,0 +1,7 @@
+/host-executor/venv
+*/__pycache__/
+*.pyc
+/docker/whatsapp/node_modules
+/docker/whatsapp/dist
+/docker/whatsapp/.wwebjs_cache
+/docker/whatsapp/session
