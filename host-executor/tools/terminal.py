@@ -10,6 +10,9 @@ def run_terminal(payload):
 
     if not command:
         return {"error": "No command provided"}
+    
+    if len(command) > 200:
+        return {"error": "Command too long"}
 
     parsed = shlex.split(command)
 

@@ -8,6 +8,15 @@ services:
     container_name: openclaw-agent
     ports:
       - "8000:8000"
+    depends_on:
+      - executor
+
+  executor:
+    build:
+      context: ../host-executor
+    container_name: host-executor
+    ports:
+      - "9000:8000"
 
   whatsapp:
     build:
