@@ -1,26 +1,35 @@
-from playwright.sync_api import sync_playwright
+import os
+import requests
+from logger import log
+
+SERP_API_KEY = os.getenv("SERP_API_KEY", "")
 
 def browser_search(payload):
-    query = payload["query"]
+    query = payload.get("query")
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-                "--disable-gpu",
-                "--single-process"
-            ]
-        )
+    try:
+        url = "https://serpapi.com/search"
+        params = {
+            "q": query,
+            "api_key": SERP_API_KEY,
+            "engine": "google",
+            "num": 5
+        }
 
-        page = browser.new_page()
-        page.goto(f"https://www.google.com/search?q={query}", timeout=60000)
+        response = requests.get(url, params=params, timeout=20)
+        data = response.json()
 
-        page.wait_for_timeout(2000)
+        results = []
 
-        results = page.locator("h3").all_inner_texts()
+        for item in data.get("organic_results", [])[:5]:
+            results.append(
+                f"{item.get('title')} - {item.get('link')}"
+            )
 
-        browser.close()
+        log(f"browser_search query={query} results={results}")
 
-        return {"results": results[:5]}
+        return {"results": results}
+
+    except Exception as e:
+        log(f"browser_search ERROR: {str(e)}")
+        return {"error": str(e)}
