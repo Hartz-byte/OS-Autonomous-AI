@@ -1,5 +1,6 @@
 import requests
 import json
+import re
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -8,15 +9,23 @@ EXECUTOR_URL = "http://executor:8000"
 
 app = FastAPI()
 
+
 class MessageRequest(BaseModel):
     message: str
 
-TOOLS = """
-You have access to the following tools:
 
-IMPORTANT:
-- If the user greets (Hello, Hi, Hey), DO NOT call any tool.
-- If the answer can be generated from general knowledge, DO NOT use browser_search.
+TOOLS = """
+You are an autonomous AI agent.
+
+STRICT RULES:
+- You MUST respond with ONLY valid JSON.
+- Never include text outside JSON.
+- Never return both "tool" and "final" together.
+- If greeting (Hi, Hello, Hey) → respond with final.
+- If general knowledge → respond with final.
+- Only call tool if real-time or external data is required.
+
+Available tools:
 
 1. browser_search
    payload: {"query": "search term"}
@@ -31,19 +40,20 @@ IMPORTANT:
 3. run_terminal
    payload: {"command": "allowed command"}
 
-To use a tool, respond ONLY in this JSON format:
-
+TO CALL A TOOL:
 {
   "tool": "tool_name",
   "payload": { ... }
 }
 
-If no tool is needed, respond with:
+TO ANSWER DIRECTLY:
 {
   "final": "your answer"
 }
 """
 
+
+# LLM CALL
 def ask_llm(prompt):
     response = requests.post(
         OLLAMA_URL,
@@ -51,33 +61,53 @@ def ask_llm(prompt):
             "model": "qwen2:7b-instruct",
             "prompt": prompt,
             "stream": False
-        }
+        },
+        timeout=180
     )
+
     return response.json()["response"]
 
+
+# SAFE JSON EXTRACTION
+def extract_json(text):
+    try:
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if not match:
+            return None
+        return json.loads(match.group())
+    except:
+        return None
+
+
+# TOOL CALL
 def call_tool(tool_name, payload):
     try:
         response = requests.post(
             f"{EXECUTOR_URL}/tool/{tool_name}",
             json=payload,
-            timeout=120
+            timeout=180
         )
         return response.json()
     except Exception as e:
         return {"error": str(e)}
 
+
+# FORMAT SEARCH RESULTS CLEANLY
+def format_search_results(results):
+    if not results:
+        return "No relevant results were found."
+
+    formatted = "Here are the latest results:\n\n"
+
+    for i, item in enumerate(results, 1):
+        formatted += f"{i}. {item}\n\n"
+
+    return formatted.strip()
+
+
+# AUTONOMOUS LOOP
 def autonomous_loop(user_input):
     context = f"""
-You are an autonomous AI agent.
-
-RULES:
-- Only call a tool if absolutely necessary.
-- Never call the same tool twice with identical payload.
-- After receiving tool results, you MUST either:
-  1) Provide final answer
-  OR
-  2) Call a DIFFERENT tool.
-
 User request:
 {user_input}
 
@@ -90,18 +120,16 @@ User request:
         reply = ask_llm(context)
         print("LLM RAW:", reply)
 
-        # Extract JSON safely
-        try:
-            start = reply.find("{")
-            end = reply.rfind("}") + 1
-            json_str = reply[start:end]
-            decision = json.loads(json_str)
-        except:
+        decision = extract_json(reply)
+
+        if not decision:
             return reply.strip()
 
+        # FINAL ANSWER
         if "final" in decision:
             return decision["final"]
 
+        # TOOL CALL
         if "tool" in decision:
             tool_name = decision["tool"]
             payload = decision["payload"]
@@ -109,19 +137,41 @@ User request:
             call_signature = f"{tool_name}:{json.dumps(payload, sort_keys=True)}"
 
             if call_signature in previous_calls:
-                return "Stopping due to repeated identical tool calls."
+                return "Stopped due to repeated identical tool call."
 
             previous_calls.add(call_signature)
 
             print(f"Calling tool: {tool_name}")
             tool_result = call_tool(tool_name, payload)
+            print("TOOL RESULT:", tool_result)
 
-            context += f"""
+            # Special formatting for search results
+            if tool_name == "browser_search":
+                results = tool_result.get("results", [])
+                formatted = format_search_results(results)
+
+                context += f"""
 Tool used: {tool_name}
-Tool result:
-{tool_result}
+Raw result:
+{json.dumps(tool_result, indent=2)}
 
-Now analyze the result and provide final answer unless another tool is strictly required.
+Now provide final answer ONLY in JSON:
+
+{{
+  "final": "{formatted}"
+}}
+"""
+            else:
+                context += f"""
+Tool used: {tool_name}
+Result:
+{json.dumps(tool_result, indent=2)}
+
+Now respond ONLY with:
+
+{{
+  "final": "your summarized answer"
+}}
 """
 
         else:
@@ -129,9 +179,15 @@ Now analyze the result and provide final answer unless another tool is strictly 
 
     return "Task stopped after max steps."
 
+
+# FASTAPI ENDPOINT
 @app.post("/message")
 def handle_message(req: MessageRequest):
     print("User:", req.message)
+
     result = autonomous_loop(req.message)
+
     print("Final:", result)
+
+    # Always return clean text to WhatsApp
     return {"reply": result}

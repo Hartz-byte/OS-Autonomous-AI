@@ -1,6 +1,10 @@
 import datetime
+import os
 
-LOG_PATH = r"D:\AIML-Projects\OS-Autonomous-AI\logs\executor.log"
+LOG_DIR = "logs"
+LOG_PATH = os.path.join(LOG_DIR, "executor.log")
+
+os.makedirs(LOG_DIR, exist_ok=True)
 
 def log(entry):
     with open(LOG_PATH, "a", encoding="utf-8") as f:

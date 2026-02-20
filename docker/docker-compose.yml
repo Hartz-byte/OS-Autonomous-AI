@@ -12,11 +12,15 @@ services:
       - executor
 
   executor:
-    build:
-      context: ../host-executor
+    build: .
     container_name: host-executor
-    ports:
-      - "9000:8000"
+    privileged: true
+    network_mode: "host"
+    volumes:
+      - /:/host_root
+      - D:/:/windows_drive
+    environment:
+      - PYTHONUNBUFFERED=1
 
   whatsapp:
     build:
