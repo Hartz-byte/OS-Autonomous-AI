@@ -1,7 +1,66 @@
+# Python virtual environments
 /host-executor/venv
+venv/
+.venv/
+
+# Byte-compiled / optimized / DLL files
 */__pycache__/
+*.py[cod]
 *.pyc
+*.pyo
+*.pyd
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Node modules and build artifacts
+node_modules/
 /docker/whatsapp/node_modules
 /docker/whatsapp/dist
 /docker/whatsapp/.wwebjs_cache
-/docker/whatsapp/session
+
+# WhatsApp session data (contains local state, cookies, local DBs, etc.)
+/docker/whatsapp/session/
+
+# Logs, results and outputs
+logs/
+results/
+outputs/
+*.log
+
+# Docker and environment files (secrets)
+.env
+.env.*
+docker-compose.override.yml
+
+# Databases and local storage
+*.sqlite
+*.db
+*.sqlite3
+
+# Keys and certificates
+*.pem
+*.key
+id_rsa*
+id_*
+
+# IDE/editor directories
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.cache
