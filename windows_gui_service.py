@@ -31,5 +31,14 @@ def gui_action(payload: dict):
         y = payload.get("y")
         pyautogui.click(x=int(x), y=int(y))
         return {"status": "Clicked"}
+    
+    elif action == "open_file":
+        path = payload.get("path")
+        subprocess.Popen(f'explorer "{path}"')
+        return {"status": f"Opened {path}"}
+
+    elif action == "open_recycle_bin":
+        subprocess.Popen("explorer shell:RecycleBinFolder")
+        return {"status": "Recycle Bin opened"}
 
     return {"error": "Invalid action"}

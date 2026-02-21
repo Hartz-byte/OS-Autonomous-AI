@@ -14,16 +14,25 @@ class MessageRequest(BaseModel):
     message: str
 
 
+# PROMPT
 TOOLS = """
 You are an autonomous AI agent.
 
 STRICT RULES:
-- You MUST respond with ONLY valid JSON.
+- Respond with ONLY valid JSON.
 - Never include text outside JSON.
 - Never return both "tool" and "final" together.
+- Do NOT rewrite, modify, simplify, or correct file paths.
+- Always use the EXACT path provided by the user.
 - If greeting (Hi, Hello, Hey) → respond with final.
 - If general knowledge → respond with final.
-- Only call tool if real-time or external data is required.
+- Only call tool if real execution is required.
+
+TOOL PRIORITY (IMPORTANT):
+1. windows_gui → GUI actions (open apps, open files on system, typing)
+2. file_operation → read/write/delete/list files
+3. cli_command → Linux container terminal
+4. browser_search → internet
 
 Available tools:
 
@@ -33,35 +42,19 @@ Available tools:
 2. file_operation
    payload: {
        "operation": "read | write | delete | list",
-       "path": "absolute path inside workspace",
+       "path": "absolute path",
        "content": "optional"
    }
 
 3. cli_command
-   payload: {
-       "command": "terminal command"
-   }
+   payload: {"command": "terminal command"}
 
 4. windows_gui
    payload: {
-       "action": "open_notepad | type_text | press | click",
+       "action": "open_notepad | type_text | open_file | open_recycle_bin",
        "text": "optional",
-       "key": "optional",
-       "x": 0,
-       "y": 0
+       "path": "optional"
    }
-
-Use cli_command for ANY terminal execution.
-
-When calling cli_command, always use:
-
-{
-  "tool": "cli_command",
-  "payload": {
-    "command": "node -v"
-  }
-}
-
 
 TO CALL A TOOL:
 {
@@ -69,18 +62,42 @@ TO CALL A TOOL:
   "payload": { ... }
 }
 
-TO ANSWER DIRECTLY:
+TO FINISH:
 {
   "final": "your answer"
 }
 
-DO NOT respond with "final" unless the task is completed.
-
-If writing a file on Windows C drive, use:
-"/mnt/c/Users/etern/Desktop/filename.txt"
-
-Never assume a username. Always use "etern".
+Do NOT return final unless task is fully complete.
 """
+
+
+# INTENT CLASSIFIER
+def classify_intent(user_input: str):
+    text = user_input.lower().strip()
+
+    if text in ["hi", "hello", "hey"]:
+        return "greeting"
+
+    if "open notepad" in text:
+        return "open_notepad"
+
+    if "open recycle bin" in text:
+        return "open_recycle_bin"
+
+    if "open this file on my system" in text:
+        return "open_file_gui"
+
+    if text.startswith("read file") or "show content" in text:
+        return "file_read"
+
+    return "llm"
+
+
+def extract_path_from_quotes(text: str):
+    match = re.search(r'"(.*?)"', text)
+    if match:
+        return match.group(1)
+    return None
 
 
 # LLM CALL
@@ -98,9 +115,6 @@ def ask_llm(prompt):
 
         data = response.json()
 
-        # Debug logging
-        # print("OLLAMA RAW RESPONSE:", data)
-
         if "response" in data:
             return data["response"]
 
@@ -113,7 +127,7 @@ def ask_llm(prompt):
         return f'{{"final": "LLM connection error: {str(e)}"}}'
 
 
-# SAFE JSON EXTRACTION
+# JSON EXTRACTION
 def extract_json(text):
     try:
         match = re.search(r"\{.*\}", text, re.DOTALL)
@@ -137,21 +151,43 @@ def call_tool(tool_name, payload):
         return {"error": str(e)}
 
 
-# FORMAT SEARCH RESULTS CLEANLY
-def format_search_results(results):
-    if not results:
-        return "No relevant results were found."
-
-    formatted = "Here are the latest results:\n\n"
-
-    for i, item in enumerate(results, 1):
-        formatted += f"{i}. {item}\n\n"
-
-    return formatted.strip()
-
-
 # AUTONOMOUS LOOP
 def autonomous_loop(user_input):
+
+    intent = classify_intent(user_input)
+
+    # GREETING
+    if intent == "greeting":
+        return "Hello!"
+
+    # OPEN NOTEPAD
+    if intent == "open_notepad":
+        result = call_tool("windows_gui", {
+            "action": "open_notepad"
+        })
+        return result.get("status", "Notepad opened.")
+
+    # OPEN RECYCLE BIN
+    if intent == "open_recycle_bin":
+        result = call_tool("windows_gui", {
+            "action": "open_recycle_bin"
+        })
+        return result.get("status", "Recycle Bin opened.")
+
+    # OPEN FILE ON SYSTEM (GUI)
+    if intent == "open_file_gui":
+        path = extract_path_from_quotes(user_input)
+        if not path:
+            return "No file path detected."
+
+        result = call_tool("windows_gui", {
+            "action": "open_file",
+            "path": path
+        })
+
+        return result.get("status", f"Opened {path}")
+
+    # LLM HANDLED TASKS
     context = f"""
 User request:
 {user_input}
@@ -161,20 +197,19 @@ User request:
 
     previous_calls = set()
 
-    for step in range(5):
-        reply = ask_llm(context)
-        print("LLM RAW:", reply)
+    for step in range(8):
 
+        reply = ask_llm(context)
         decision = extract_json(reply)
 
         if not decision:
             return reply.strip()
 
-        # FINAL ANSWER
+        # FINAL
         if "final" in decision:
             return decision["final"]
 
-        # TOOL CALL
+        # TOOL
         if "tool" in decision:
             tool_name = decision["tool"]
             payload = decision["payload"]
@@ -186,37 +221,16 @@ User request:
 
             previous_calls.add(call_signature)
 
-            print(f"Calling tool: {tool_name}")
             tool_result = call_tool(tool_name, payload)
-            print("TOOL RESULT:", tool_result)
 
-            # Special formatting for search results
-            if tool_name == "browser_search":
-                results = tool_result.get("results", [])
-                formatted = format_search_results(results)
-
-                context += f"""
-Tool used: {tool_name}
-Raw result:
-{json.dumps(tool_result, indent=2)}
-
-Now provide final answer ONLY in JSON:
-
-{{
-  "final": "{formatted}"
-}}
-"""
-            else:
-                context += f"""
+            context += f"""
 Tool used: {tool_name}
 Result:
 {json.dumps(tool_result, indent=2)}
 
-Now respond ONLY with:
-
-{{
-  "final": "your summarized answer"
-}}
+If more steps are needed, call another tool.
+If task is complete, return final.
+Respond ONLY in JSON.
 """
 
         else:
@@ -225,14 +239,8 @@ Now respond ONLY with:
     return "Task stopped after max steps."
 
 
-# FASTAPI ENDPOINT
+# FASTAPI
 @app.post("/message")
 def handle_message(req: MessageRequest):
-    print("User:", req.message)
-
     result = autonomous_loop(req.message)
-
-    print("Final:", result)
-
-    # Always return clean text to WhatsApp
     return {"reply": result}
