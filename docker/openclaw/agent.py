@@ -42,6 +42,15 @@ Available tools:
        "command": "terminal command"
    }
 
+4. windows_gui
+   payload: {
+       "action": "open_notepad | type_text | press | click",
+       "text": "optional",
+       "key": "optional",
+       "x": 0,
+       "y": 0
+   }
+
 Use cli_command for ANY terminal execution.
 
 When calling cli_command, always use:
@@ -90,7 +99,7 @@ def ask_llm(prompt):
         data = response.json()
 
         # Debug logging
-        print("OLLAMA RAW RESPONSE:", data)
+        # print("OLLAMA RAW RESPONSE:", data)
 
         if "response" in data:
             return data["response"]

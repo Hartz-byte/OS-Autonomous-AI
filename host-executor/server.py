@@ -5,6 +5,7 @@ from tools.terminal import run_terminal
 from tools.files import file_operation
 from tools.browser import browser_search
 import subprocess
+import requests
 from logger import log
 
 app = FastAPI()
@@ -59,5 +60,17 @@ def cli_command(payload: dict):
             "returncode": result.returncode
         }
 
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/tool/windows_gui")
+def windows_gui(payload: dict):
+    try:
+        response = requests.post(
+            "http://host.docker.internal:9000/gui_action",
+            json=payload,
+            timeout=30
+        )
+        return response.json()
     except Exception as e:
         return {"error": str(e)}
