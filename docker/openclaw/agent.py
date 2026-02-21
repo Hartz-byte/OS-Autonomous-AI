@@ -37,15 +37,22 @@ Available tools:
        "content": "optional"
    }
 
-3. run_terminal
-   payload: {"command": "allowed command"}
+3. cli_command
+   payload: {
+       "command": "terminal command"
+   }
 
-DO NOT respond with "final" unless the task is completed.
+Use cli_command for ANY terminal execution.
 
-If writing a file on Windows C drive, use:
-"/mnt/c/Users/etern/Desktop/filename.txt"
+When calling cli_command, always use:
 
-Never assume a username. Always use "etern".
+{
+  "tool": "cli_command",
+  "payload": {
+    "command": "node -v"
+  }
+}
+
 
 TO CALL A TOOL:
 {
@@ -57,6 +64,13 @@ TO ANSWER DIRECTLY:
 {
   "final": "your answer"
 }
+
+DO NOT respond with "final" unless the task is completed.
+
+If writing a file on Windows C drive, use:
+"/mnt/c/Users/etern/Desktop/filename.txt"
+
+Never assume a username. Always use "etern".
 """
 
 
