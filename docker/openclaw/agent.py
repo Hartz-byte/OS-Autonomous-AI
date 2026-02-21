@@ -40,6 +40,13 @@ Available tools:
 3. run_terminal
    payload: {"command": "allowed command"}
 
+DO NOT respond with "final" unless the task is completed.
+
+If writing a file on Windows C drive, use:
+"/mnt/c/Users/etern/Desktop/filename.txt"
+
+Never assume a username. Always use "etern".
+
 TO CALL A TOOL:
 {
   "tool": "tool_name",
@@ -55,17 +62,32 @@ TO ANSWER DIRECTLY:
 
 # LLM CALL
 def ask_llm(prompt):
-    response = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": "qwen2:7b-instruct",
-            "prompt": prompt,
-            "stream": False
-        },
-        timeout=180
-    )
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": "qwen2:7b-instruct",
+                "prompt": prompt,
+                "stream": False
+            },
+            timeout=300
+        )
 
-    return response.json()["response"]
+        data = response.json()
+
+        # Debug logging
+        print("OLLAMA RAW RESPONSE:", data)
+
+        if "response" in data:
+            return data["response"]
+
+        if "error" in data:
+            return f'{{"final": "LLM error: {data["error"]}"}}'
+
+        return '{"final": "Unexpected LLM response format."}'
+
+    except Exception as e:
+        return f'{{"final": "LLM connection error: {str(e)}"}}'
 
 
 # SAFE JSON EXTRACTION

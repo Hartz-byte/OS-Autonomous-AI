@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 
   openclaw:
@@ -12,13 +10,18 @@ services:
       - executor
 
   executor:
-    build: .
+    build:
+      context: ../host-executor
     container_name: host-executor
     privileged: true
-    network_mode: "host"
+    user: root
+    ports:
+      - "8001:8000"
     volumes:
-      - /:/host_root
-      - D:/:/windows_drive
+      - D:/:/mnt/d
+      - C:/:/mnt/c
+    env_file:
+      - ../.env
     environment:
       - PYTHONUNBUFFERED=1
 
