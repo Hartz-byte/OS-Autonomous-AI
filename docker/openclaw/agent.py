@@ -29,8 +29,8 @@ STRICT RULES:
 - Only call tool if real execution is required.
 
 TOOL PRIORITY (IMPORTANT):
-1. windows_gui → GUI actions (open apps, open files on system, typing)
-2. file_operation → read/write/delete/list files
+1. windows_gui → GUI actions (open apps, open files on system, typing, browser)
+2. file_operation → read/write/delete/list/copy/move files
 3. cli_command → Linux container terminal
 4. browser_search → internet
 
@@ -41,9 +41,10 @@ Available tools:
 
 2. file_operation
    payload: {
-       "operation": "read | write | delete | list",
-       "path": "absolute path",
-       "content": "optional"
+       "operation": "read | write | delete | list | copy | move",
+       "path": "source path (absolute)",
+       "destination": "target path (absolute, required for copy/move)",
+       "content": "text content (optional for write)"
    }
 
 3. cli_command
@@ -51,9 +52,9 @@ Available tools:
 
 4. windows_gui
    payload: {
-       "action": "open_notepad | type_text | open_file | open_recycle_bin",
-       "text": "optional",
-       "path": "optional"
+       "action": "open_notepad | type_text | open_file | open_folder | open_recycle_bin",
+       "text": "text to type (optional)",
+       "path": "absolute path to file or folder (required for open_file/open_folder)"
    }
 
 TO CALL A TOOL:
@@ -78,26 +79,7 @@ def classify_intent(user_input: str):
     if text in ["hi", "hello", "hey"]:
         return "greeting"
 
-    if "open notepad" in text:
-        return "open_notepad"
-
-    if "open recycle bin" in text:
-        return "open_recycle_bin"
-
-    if "open this file on my system" in text:
-        return "open_file_gui"
-
-    if text.startswith("read file") or "show content" in text:
-        return "file_read"
-
     return "llm"
-
-
-def extract_path_from_quotes(text: str):
-    match = re.search(r'"(.*?)"', text)
-    if match:
-        return match.group(1)
-    return None
 
 
 # LLM CALL
@@ -159,33 +141,6 @@ def autonomous_loop(user_input):
     # GREETING
     if intent == "greeting":
         return "Hello!"
-
-    # OPEN NOTEPAD
-    if intent == "open_notepad":
-        result = call_tool("windows_gui", {
-            "action": "open_notepad"
-        })
-        return result.get("status", "Notepad opened.")
-
-    # OPEN RECYCLE BIN
-    if intent == "open_recycle_bin":
-        result = call_tool("windows_gui", {
-            "action": "open_recycle_bin"
-        })
-        return result.get("status", "Recycle Bin opened.")
-
-    # OPEN FILE ON SYSTEM (GUI)
-    if intent == "open_file_gui":
-        path = extract_path_from_quotes(user_input)
-        if not path:
-            return "No file path detected."
-
-        result = call_tool("windows_gui", {
-            "action": "open_file",
-            "path": path
-        })
-
-        return result.get("status", f"Opened {path}")
 
     # LLM HANDLED TASKS
     context = f"""

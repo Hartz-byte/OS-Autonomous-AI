@@ -11,6 +11,7 @@ from logger import log
 app = FastAPI()
 
 def normalize_path(path: str):
+    if not path: return path
     path = path.replace("\\", "/")
 
     # Convert D:/ or D:\ to /mnt/d/
@@ -25,6 +26,16 @@ def normalize_path(path: str):
 
     return path
 
+def denormalize_path(path: str):
+    if not path: return path
+    # Convert /mnt/c/... to C:\...
+    match = re.match(r"^/mnt/([a-z])", path)
+    if match:
+        drive = match.group(1).upper()
+        path = drive + ":" + path[6:]
+    
+    return path.replace("/", "\\")
+
 @app.post("/tool/run_terminal")
 def terminal(payload: dict):
     log(f"run_terminal called: {payload}")
@@ -36,7 +47,8 @@ def file_ops(payload: dict):
     return file_operation(
         operation=payload.get("operation"),
         path=normalize_path(payload.get("path")),
-        content=payload.get("content")
+        content=payload.get("content"),
+        destination=normalize_path(payload.get("destination"))
     )
 
 @app.post("/tool/browser_search")
@@ -66,6 +78,10 @@ def cli_command(payload: dict):
 @app.post("/tool/windows_gui")
 def windows_gui(payload: dict):
     try:
+        # Denormalize path if present
+        if "path" in payload:
+            payload["path"] = denormalize_path(payload["path"])
+            
         response = requests.post(
             "http://host.docker.internal:9000/gui_action",
             json=payload,

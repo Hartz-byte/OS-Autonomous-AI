@@ -1,12 +1,10 @@
-# ATHENA OS
-
 ## OpenClaw-Based Autonomous Windows AI Agent
 
 ---
 
 ## 1. SYSTEM OBJECTIVE
 
-Athena OS is a self-hosted, WhatsApp-controlled AI agent built using:
+OS Automation AI is a self-hosted, WhatsApp-controlled AI agent built using:
 
 - OpenClaw (agent brain)
 - Local LLM (quantized)
